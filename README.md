@@ -26,15 +26,28 @@
 
 ## Getting Started
 
+### Option a: Installing via crates.io
+
+Float is available as a binary crate on crates.io under the name `float-mux` (`float` was already taken, sadly...)
+
+Install it with cargo and run it.
+
+```bash
+cargo install float-mux
+float-mux
+```
+
+### Option b: Building from source
+
 Clone the repository and build with Cargo.
 
 ```bash
 git clone https://github.com/henktorius/float
 cd float
-cargo run --release
+cargo build --release
 ```
 
-The binary will be at `target/release/float`.
+The binary will be at `target/release/float-mux`.
 
 ### Keyboard shortcuts
 
