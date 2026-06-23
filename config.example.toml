@@ -1,0 +1,55 @@
+# float configuration file
+# Location: ~/.config/float/config.toml or $XDG_CONFIG_HOME/float/config.toml
+# Any missing values will fall back to the defaults shown below.
+
+# Shell to spawn in new windows.
+# - Non-empty: used directly (e.g. "/usr/bin/fish", "/bin/zsh")
+# - Empty (""): falls back to the $SHELL environment variable
+# - If $SHELL is also unset: falls back to "bash"
+# shell = ""
+
+[theme]
+# ANSI color index (0–255).
+focused_border = 14
+
+# Border color for unfocused windows.
+unfocused_border = 8
+
+# Color used for the hint message when no windows are open.
+hint_text = 8
+
+[keys]
+# Every binding is a single ASCII character used with the Alt modifier.
+# Arrow keys always work as fallbacks regardless of these settings.
+new_window = "c"
+focus_next = "n"
+focus_prev = "p"
+quit = "q"
+close_window = "x"
+move_left = "h"
+move_down = "j"
+move_up = "k"
+move_right = "l"
+resize_left = "H"           # Alt+Shift+H
+resize_down = "J"           # Alt+Shift+J
+resize_up = "K"             # Alt+Shift+K
+resize_right = "L"          # Alt+Shift+L
+
+[layout]
+# Pixel offset when cascading a new window from the focused one.
+cascade_offset_x = 2
+cascade_offset_y = 1
+
+# Size of a new window relative to the terminal (0.0–1.0).
+new_window_width_ratio = 0.5
+new_window_height_ratio = 0.5
+
+# Minimum window dimensions (including borders).
+min_window_cols = 6
+min_window_rows = 5
+
+# After pressing Esc, the next key within this window is treated as Alt+key.
+alt_timeout_ms = 200
+
+# Event poll interval in milliseconds.
+poll_interval_ms = 16
