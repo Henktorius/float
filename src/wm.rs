@@ -550,7 +550,6 @@ impl WindowManager {
         Ok(())
     }
 
-
     fn toggle_pin_focused(&mut self) {
         if self.windows.is_empty() {
             return;
@@ -698,7 +697,7 @@ mod tests {
         let mut v = vec![true];
         v.push(false);
         let new_idx = bring_to_front_test(&mut v, 1);
-        assert_eq!(new_idx, 0);  // new unpinned window goes below pinned
+        assert_eq!(new_idx, 0); // new unpinned window goes below pinned
         assert_eq!(v, vec![false, true]);
     }
 }
