@@ -80,6 +80,15 @@ The binary will be at `target/release/float-mux`.
 - **Resize**: drag the left, right, bottom, or bottom-corner edges
 - **Focus**: click on any window
 
+#### Linux console (no X11)
+
+On a bare virtual console (`TERM=linux`) the terminal emits no mouse escape
+sequences, so Float talks to the [`gpm`](https://linux.die.net/man/8/gpm) daemon
+directly. Start `gpm` (for example `gpm -m /dev/input/mice -t imps2`) before
+launching Float. `libgpm.so` is loaded at runtime; if it or the daemon is
+absent, Float runs normally without mouse support. Any other terminal keeps
+using crossterm mouse capture unchanged.
+
 ## Configuration
 
 Float reads `~/.config/float/config.toml`. Check out the `config.example.toml` file in the repository.
