@@ -42,6 +42,13 @@ pub struct WindowManager {
     pub(crate) config: Config,
     quit: bool,
     pub(crate) force_full: bool,
+    /// Draw our own mouse pointer (the console has none once gpm hands the
+    /// mouse to us). Off for terminal emulators, which draw their own.
+    pub(crate) software_cursor: bool,
+    pub(crate) cursor_pos: Option<(u16, u16)>,
+    /// While a press is forwarded to a child that requested mouse reporting,
+    /// the id of that window, so drag/release keep going to it.
+    mouse_fwd: Option<usize>,
     pub(crate) term_cols: u16,
     pub(crate) term_rows: u16,
     pub(crate) front_buf: Vec<Vec<Cell>>,
@@ -61,6 +68,9 @@ impl WindowManager {
             config,
             quit: false,
             force_full: false,
+            software_cursor: false,
+            cursor_pos: None,
+            mouse_fwd: None,
             drag: None,
             term_cols,
             term_rows,
@@ -102,10 +112,11 @@ impl WindowManager {
             );
             return Ok(());
         }
-        if !self.windows.is_empty()
-            && let Some(bytes) = crate::input::encode_key(key)
-        {
-            self.windows[self.focused].write(&bytes)?;
+        if !self.windows.is_empty() {
+            let app_cursor = self.windows[self.focused].screen().application_cursor();
+            if let Some(bytes) = crate::input::encode_key(key, app_cursor) {
+                self.windows[self.focused].write(&bytes)?;
+            }
         }
         Ok(())
     }
@@ -330,9 +341,61 @@ impl WindowManager {
         self.dirty = true;
     }
 
+    /// Enable the drawn mouse pointer (used when gpm drives the mouse on a
+    /// bare Linux console, which renders no pointer of its own).
+    pub fn enable_software_cursor(&mut self) {
+        self.software_cursor = true;
+    }
+
     pub fn handle_mouse(&mut self, event: MouseEvent) -> anyhow::Result<()> {
         if self.config.disable_mouse {
             return Ok(());
+        }
+
+        if self.software_cursor {
+            let pos = (event.column, event.row);
+            if self.cursor_pos != Some(pos) {
+                self.cursor_pos = Some(pos);
+                self.dirty = true;
+            }
+        }
+
+        // Passthrough: if a child program enabled mouse reporting, events over
+        // its content area (not its border) go to it as xterm sequences rather
+        // than driving Float's own move/resize.
+        if self.config.mouse_passthrough && self.drag.is_none() {
+            let target = match self.mouse_fwd {
+                Some(id) => self.windows.iter().position(|w| w.id == id),
+                None => (0..self.windows.len()).rev().find(|&i| {
+                    let w = &self.windows[i];
+                    w.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None
+                        && w.content_hit(event.column, event.row)
+                }),
+            };
+
+            if let Some(mut i) = target {
+                let mode = self.windows[i].screen().mouse_protocol_mode();
+                if mode == vt100::MouseProtocolMode::None {
+                    self.mouse_fwd = None;
+                } else {
+                    if matches!(event.kind, MouseEventKind::Down(_)) && i != self.focused {
+                        let id = self.windows[i].id;
+                        self.focused = bring_to_front(&mut self.windows, i);
+                        i = self.windows.iter().position(|w| w.id == id).unwrap();
+                    }
+                    match event.kind {
+                        MouseEventKind::Down(_) => self.mouse_fwd = Some(self.windows[i].id),
+                        MouseEventKind::Up(_) => self.mouse_fwd = None,
+                        _ => {}
+                    }
+                    let enc = self.windows[i].screen().mouse_protocol_encoding();
+                    if let Some(seq) = encode_xterm_mouse(&event, &self.windows[i], mode, enc) {
+                        let _ = self.windows[i].write(&seq);
+                        self.dirty = true;
+                    }
+                    return Ok(());
+                }
+            }
         }
 
         match event.kind {
@@ -595,6 +658,82 @@ fn bring_to_front(windows: &mut Vec<Window>, idx: usize) -> usize {
                 windows.push(w);
                 windows.len() - 1
             }
+        }
+    }
+}
+
+fn xterm_button_base(b: MouseButton) -> u32 {
+    match b {
+        MouseButton::Left => 0,
+        MouseButton::Middle => 1,
+        MouseButton::Right => 2,
+    }
+}
+
+/// Encode a mouse event as an xterm control sequence for a child program,
+/// with coordinates relative to the window's content area (1-based). Uses the
+/// SGR (1006) encoding when the child selected it, else legacy X10. Returns
+/// `None` for events the child's current mode does not want.
+fn encode_xterm_mouse(
+    ev: &MouseEvent,
+    w: &Window,
+    mode: vt100::MouseProtocolMode,
+    enc: vt100::MouseProtocolEncoding,
+) -> Option<Vec<u8>> {
+    use vt100::MouseProtocolMode as M;
+
+    let cw = w.content_w() as i32;
+    let ch = w.content_h() as i32;
+    let col = ((ev.column as i32 - w.content_x()).clamp(0, cw.max(1) - 1) + 1) as u32;
+    let row = ((ev.row as i32 - w.content_y()).clamp(0, ch.max(1) - 1) + 1) as u32;
+
+    let mut cb: u32;
+    let mut release = false;
+    match ev.kind {
+        MouseEventKind::Down(b) => cb = xterm_button_base(b),
+        MouseEventKind::Up(b) => {
+            cb = xterm_button_base(b);
+            release = true;
+        }
+        MouseEventKind::Drag(b) => {
+            if !matches!(mode, M::ButtonMotion | M::AnyMotion) {
+                return None;
+            }
+            cb = xterm_button_base(b) + 32;
+        }
+        MouseEventKind::Moved => {
+            if mode != M::AnyMotion {
+                return None;
+            }
+            cb = 32 + 3;
+        }
+        MouseEventKind::ScrollUp => cb = 64,
+        MouseEventKind::ScrollDown => cb = 65,
+        MouseEventKind::ScrollLeft => cb = 66,
+        MouseEventKind::ScrollRight => cb = 67,
+    }
+
+    if ev.modifiers.contains(KeyModifiers::SHIFT) {
+        cb += 4;
+    }
+    if ev.modifiers.contains(KeyModifiers::ALT) {
+        cb += 8;
+    }
+    if ev.modifiers.contains(KeyModifiers::CONTROL) {
+        cb += 16;
+    }
+
+    match enc {
+        vt100::MouseProtocolEncoding::Sgr => {
+            let mut s = format!("\x1b[<{cb};{col};{row}").into_bytes();
+            s.push(if release { b'm' } else { b'M' });
+            Some(s)
+        }
+        // Default / Utf8: legacy X10 form. Release reports button bits 0b11.
+        _ => {
+            let enc_cb = if release { (cb & !0b11) | 0b11 } else { cb };
+            let byte = |v: u32| (v.min(223) + 32) as u8;
+            Some(vec![0x1b, b'[', b'M', byte(enc_cb), byte(col), byte(row)])
         }
     }
 }

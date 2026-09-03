@@ -11,6 +11,12 @@ shell = ""
 # Disable mouse support entirely. Also hides the window title bar.
 disable_mouse = false
 
+# Forward mouse events to a child program that enabled xterm mouse reporting
+# (mc, vim, htop, less, …). Clicks on the border/title bar still move and
+# resize the window; clicks inside go to the program. Set false to always keep
+# the mouse for window management.
+mouse_passthrough = true
+
 [theme]
 # ANSI color index (0–255).
 focused_border = 14
