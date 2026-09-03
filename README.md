@@ -90,6 +90,14 @@ absent, Float runs normally without mouse support. Any other terminal keeps
 using crossterm mouse capture unchanged. On the console Float also draws its
 own pointer, since the console has none once gpm hands the mouse over.
 
+#### Mouse in child programs
+
+Mouse-aware programs run in a window (`mc`, `vim`, `htop`, `less`, …) receive
+the mouse when they enable xterm mouse reporting: clicks on the border and
+title bar still move and resize the window, clicks inside go to the program.
+Children whose `TERM` would be `linux` are started with `TERM=xterm-256color`.
+Disable passthrough with `mouse_passthrough = false`.
+
 ## Configuration
 
 Float reads `~/.config/float/config.toml`. Check out the `config.example.toml` file in the repository.

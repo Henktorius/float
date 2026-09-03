@@ -22,7 +22,15 @@ impl Pty {
             pixel_height: 0,
         })?;
 
-        let cmd = CommandBuilder::new(shell);
+        let mut cmd = CommandBuilder::new(shell);
+        // Float emulates an xterm-like terminal (via vt100), not the bare Linux
+        // console it may run on. If a child would otherwise inherit
+        // `TERM=linux`, upgrade it so mouse-aware programs use xterm mouse
+        // reporting (which Float forwards) instead of trying to reach gpm on a
+        // pty where it cannot work.
+        if std::env::var("TERM").is_ok_and(|t| t == "linux" || t.starts_with("linux-")) {
+            cmd.env("TERM", "xterm-256color");
+        }
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);
 

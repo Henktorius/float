@@ -110,6 +110,9 @@ pub struct Config {
     pub poll_interval_ms: u64,
     #[serde(default)]
     pub disable_mouse: bool,
+    /// Forward mouse events to a child program that has enabled xterm mouse
+    /// reporting (mc, vim, htop, …) instead of using them for window management.
+    pub mouse_passthrough: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -121,6 +124,7 @@ impl Default for Config {
             alt_timeout_ms: 200,
             poll_interval_ms: 16,
             disable_mouse: false,
+            mouse_passthrough: true,
         }
     }
 }

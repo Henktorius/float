@@ -133,6 +133,17 @@ impl Window {
         c == self.x + self.w as i32 - 1 && r == self.y + self.h as i32 - 1
     }
 
+    /// Returns true if (col, row) is inside the window's content area
+    /// (everything within the border and, if present, below the title row).
+    pub fn content_hit(&self, col: u16, row: u16) -> bool {
+        let c = col as i32;
+        let r = row as i32;
+        c >= self.content_x()
+            && c < self.content_x() + self.content_w() as i32
+            && r >= self.content_y()
+            && r < self.content_y() + self.content_h() as i32
+    }
+
     /// Returns true if (col, row) is anywhere inside the window's bounding box.
     pub fn contains_point(&self, col: u16, row: u16) -> bool {
         let c = col as i32;
