@@ -6,6 +6,11 @@
 //! `dlopen` at runtime so the crate keeps no build- or link-time dependency on
 //! it: if the shared library or the daemon is missing, [`Gpm::open`] returns
 //! `None` and Float falls back to crossterm mouse capture.
+//!
+//! Inside `screen`/`tmux` on the console our tty is a pty, so gpm cannot infer
+//! the virtual console; Float reads the active VT from
+//! `/sys/class/tty/tty0/active` and connects to that one, provided no GUI
+//! session is present. `FLOAT_GPM_VC=<n>|auto|off` overrides that choice.
 
 use std::ffi::{CStr, c_void};
 use std::os::raw::c_int;
@@ -94,6 +99,46 @@ impl Lib {
     }
 }
 
+/// The foreground virtual console number, from `/sys/class/tty/tty0/active`
+/// (e.g. `tty4` -> 4). `None` on a non-VC console (serial, etc.).
+fn active_vc() -> Option<c_int> {
+    std::fs::read_to_string("/sys/class/tty/tty0/active")
+        .ok()?
+        .trim()
+        .strip_prefix("tty")?
+        .parse()
+        .ok()
+}
+
+/// Decide which VC to hand `Gpm_Open`, or `None` to not use gpm at all.
+///
+/// * `FLOAT_GPM_VC` wins: `off` disables, `auto` forces the active VC, a
+///   number forces that VC.
+/// * `TERM=linux*` (or empty): a real console, pass 0 and let gpm derive it.
+/// * `TERM=screen*`/`tmux*` with no `DISPLAY`/`WAYLAND_DISPLAY`: a multiplexer
+///   on the console, so force the active VC (our own tty is a pty).
+/// * anything else: an emulator; let crossterm handle the mouse.
+fn target_vc() -> Option<c_int> {
+    match std::env::var("FLOAT_GPM_VC").ok().as_deref() {
+        Some("off") => return None,
+        Some("auto") => return active_vc(),
+        Some(n) => return n.parse().ok(),
+        None => {}
+    }
+
+    let term = std::env::var("TERM").unwrap_or_default();
+    if term == "linux" || term.starts_with("linux-") || term.is_empty() {
+        return Some(0);
+    }
+    let multiplexer = term.starts_with("screen") || term.starts_with("tmux");
+    let no_gui =
+        std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none();
+    if multiplexer && no_gui {
+        return active_vc();
+    }
+    None
+}
+
 /// The gpm connect parameters Midnight Commander uses on the console: forward
 /// every button and motion event to us, but let gpm keep doing its own
 /// low-level processing for anything we do not claim.
@@ -117,22 +162,22 @@ pub struct Gpm {
 }
 
 impl Gpm {
-    /// Connect to `gpm` when running on a Linux virtual console and the daemon
-    /// is reachable. Returns `None` in every other case, including a missing
-    /// `libgpm`, so the caller can fall back to crossterm mouse capture.
+    /// Connect to `gpm` when running on (or over) a Linux virtual console and
+    /// the daemon is reachable. Returns `None` in every other case, including a
+    /// missing `libgpm`, so the caller can fall back to crossterm mouse
+    /// capture.
     pub fn open() -> Option<Self> {
-        let term = std::env::var("TERM").unwrap_or_default();
-        // A real virtual console reports `linux` (or `linux-16color`, etc.).
-        // Anything else is an emulator where crossterm handles the mouse and
-        // where `Gpm_Open` would only scribble xterm sequences onto stdout.
-        let is_console = term == "linux" || term.starts_with("linux-") || term.is_empty();
-        if !is_console || !std::path::Path::new("/dev/gpmctl").exists() {
+        if !std::path::Path::new("/dev/gpmctl").exists() {
             return None;
         }
+        let vc = target_vc()?;
 
         let lib = Lib::load()?;
         let mut conn = connect_params();
-        let fd = unsafe { (lib.open)(&mut conn, 0) };
+        conn.vc = vc;
+        // `Gpm_Open`'s second argument forces a virtual console when > 0; 0
+        // means "derive it from our controlling tty" (only works on a real VC).
+        let fd = unsafe { (lib.open)(&mut conn, vc) };
         if fd < 0 {
             unsafe { libc::dlclose(lib.handle) };
             return None;

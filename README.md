@@ -90,13 +90,18 @@ absent, Float runs normally without mouse support. Any other terminal keeps
 using crossterm mouse capture unchanged. On the console Float also draws its
 own pointer, since the console has none once gpm hands the mouse over.
 
+Inside `screen` or `tmux` on the console it still works: Float connects to gpm
+for the active virtual console (read from `/sys/class/tty/tty0/active`) unless a
+GUI session is present. Set `FLOAT_GPM_VC=<n>` to force a specific console,
+`FLOAT_GPM_VC=auto`, or `FLOAT_GPM_VC=off` to disable.
+
 #### Mouse in child programs
 
 Mouse-aware programs run in a window (`mc`, `vim`, `htop`, `less`, …) receive
 the mouse when they enable xterm mouse reporting: clicks on the border and
 title bar still move and resize the window, clicks inside go to the program.
-Children whose `TERM` would be `linux` are started with `TERM=xterm-256color`.
-Disable passthrough with `mouse_passthrough = false`.
+Children whose `TERM` would be `linux`, `screen`, or `tmux` are started with
+`TERM=xterm-256color`. Disable passthrough with `mouse_passthrough = false`.
 
 ## Configuration
 
