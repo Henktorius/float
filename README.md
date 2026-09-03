@@ -87,7 +87,8 @@ sequences, so Float talks to the [`gpm`](https://linux.die.net/man/8/gpm) daemon
 directly. Start `gpm` (for example `gpm -m /dev/input/mice -t imps2`) before
 launching Float. `libgpm.so` is loaded at runtime; if it or the daemon is
 absent, Float runs normally without mouse support. Any other terminal keeps
-using crossterm mouse capture unchanged.
+using crossterm mouse capture unchanged. On the console Float also draws its
+own pointer, since the console has none once gpm hands the mouse over.
 
 ## Configuration
 

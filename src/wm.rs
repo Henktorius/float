@@ -42,6 +42,10 @@ pub struct WindowManager {
     pub(crate) config: Config,
     quit: bool,
     pub(crate) force_full: bool,
+    /// Draw our own mouse pointer (the console has none once gpm hands the
+    /// mouse to us). Off for terminal emulators, which draw their own.
+    pub(crate) software_cursor: bool,
+    pub(crate) cursor_pos: Option<(u16, u16)>,
     pub(crate) term_cols: u16,
     pub(crate) term_rows: u16,
     pub(crate) front_buf: Vec<Vec<Cell>>,
@@ -61,6 +65,8 @@ impl WindowManager {
             config,
             quit: false,
             force_full: false,
+            software_cursor: false,
+            cursor_pos: None,
             drag: None,
             term_cols,
             term_rows,
@@ -330,9 +336,23 @@ impl WindowManager {
         self.dirty = true;
     }
 
+    /// Enable the drawn mouse pointer (used when gpm drives the mouse on a
+    /// bare Linux console, which renders no pointer of its own).
+    pub fn enable_software_cursor(&mut self) {
+        self.software_cursor = true;
+    }
+
     pub fn handle_mouse(&mut self, event: MouseEvent) -> anyhow::Result<()> {
         if self.config.disable_mouse {
             return Ok(());
+        }
+
+        if self.software_cursor {
+            let pos = (event.column, event.row);
+            if self.cursor_pos != Some(pos) {
+                self.cursor_pos = Some(pos);
+                self.dirty = true;
+            }
         }
 
         match event.kind {

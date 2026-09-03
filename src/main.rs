@@ -36,6 +36,10 @@ fn main() -> anyhow::Result<()> {
         gpm::Gpm::open()
     };
     let mouse_capture = !disable_mouse && gpm.is_none();
+    if gpm.is_some() {
+        // The console draws no pointer once gpm hands the mouse to us.
+        wm.enable_software_cursor();
+    }
 
     enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, cursor::Hide,)?;

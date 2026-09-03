@@ -2,7 +2,7 @@ use std::io::{self, Write};
 
 use crossterm::{
     cursor, queue,
-    style::{Print, SetBackgroundColor, SetForegroundColor},
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
 };
 
 use crate::cell::{self, Cell};
@@ -90,6 +90,25 @@ impl WindowManager {
                     }
                 }
             }
+        }
+
+        // Software mouse pointer: reverse-video the cell under the pointer.
+        // Stamped into back_buf so the normal frame diff draws and erases it.
+        if self.software_cursor
+            && let Some((cx, cy)) = self.cursor_pos
+            && (cx as usize) < cols as usize
+            && (cy as usize) < rows as usize
+        {
+            let c = &mut self.back_buf[cy as usize][cx as usize];
+            let solid = |color| match color {
+                Color::Reset => None,
+                other => Some(other),
+            };
+            *c = Cell {
+                ch: c.ch,
+                fg: solid(c.bg).unwrap_or(Color::Black),
+                bg: solid(c.fg).unwrap_or(Color::White),
+            };
         }
 
         let mut stdout = io::stdout();
