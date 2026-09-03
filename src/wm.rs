@@ -112,10 +112,11 @@ impl WindowManager {
             );
             return Ok(());
         }
-        if !self.windows.is_empty()
-            && let Some(bytes) = crate::input::encode_key(key)
-        {
-            self.windows[self.focused].write(&bytes)?;
+        if !self.windows.is_empty() {
+            let app_cursor = self.windows[self.focused].screen().application_cursor();
+            if let Some(bytes) = crate::input::encode_key(key, app_cursor) {
+                self.windows[self.focused].write(&bytes)?;
+            }
         }
         Ok(())
     }
