@@ -39,11 +39,55 @@ cargo install float-mux
 float-mux
 ```
 
-### 2. Downloading release from GitHub
+### 2. Nix/NixOS
 
-You can find the binaries for every version tag in the ![releases](https://github.com/Henktorius/float/releases/latest) section
+Float contains a Nix flake. Run this command to test it out:
+```nix
+nix run github:Henktorius/float
+```
 
-### 3. Building from source
+To install it permanently (on NixOS), first add Float to your flake inputs:
+```nix
+{
+  inputs = {
+    # ... other inputs
+
+    float = {
+      url = "github:Henktorius/float";
+      inputs.nixpkgs.follows = "nixpkgs"; # this assumes nixos unstable
+    };
+  };
+
+  outputs = inputs @ { self, nixpkgs, ... }: {
+    # example host, replace with your own!
+    nixosConfigurations.example = nixpkgs.lib.nixosSystem {
+      specialArgs = {
+        # This is important!
+        inherit inputs;
+      }
+    };
+  };
+
+  # ... rest of your flake
+}
+```
+
+Next, add Float to your system packages:
+```nix
+{ pkgs, inputs, ... }: {
+  environment.systemPackages = [
+    inputs.float.packages.${pkgs.system}.default
+  ];
+}
+```
+
+Finally, update your flake.lock and rebuild your system.
+
+### 3. Downloading release from GitHub
+
+You can find the binaries for every version tag in the [releases](https://github.com/Henktorius/float/releases/latest) section
+
+### 4. Building from source
 
 Clone the repository and build with Cargo
 
